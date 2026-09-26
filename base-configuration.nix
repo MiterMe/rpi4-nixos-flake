@@ -74,6 +74,28 @@
     };
   };
 
+  # ── 旁路由（网关角色）──
+  # 拓扑：客户端 → 本机(192.168.1.200) → 主路由(192.168.1.1) → 外网
+  boot.kernel.sysctl = {
+    "net.ipv4.ip_forward" = 1;              # 允许转发目标不是自己的包
+    "net.ipv4.conf.all.rp_filter" = 0;      # 同网段转发路径不对称，关严格反向路径校验
+    "net.ipv4.conf.default.rp_filter" = 0;
+    "net.ipv4.conf.all.send_redirects" = 0; # 不发 Redirect，防止客户端被"教坏"绕开本机
+    "net.ipv4.conf.default.send_redirects" = 0;
+    "net.ipv4.conf.all.accept_redirects" = 0;
+    "net.ipv4.conf.default.accept_redirects" = 0;
+  };
+
+  # 声明式 NAT，等价于：
+  #   iptables -t nat -A POSTROUTING -s 192.168.1.0/24 -o end0 -j MASQUERADE
+  # FTTR 主路由加不了静态回程路由，客户端流量必须 MASQUERADE 才能出去。
+  networking.nat = {
+    enable = true;
+    externalInterface = "end0";
+    internalInterfaces = [ "end0" ];
+    internalIPs = [ "192.168.1.0/24" ];
+  };
+
   # Enable SSH
   services.openssh = {
     enable = true;
@@ -115,6 +137,20 @@
     inetutils
     iw
     wirelesstools
+    # ↓ 补充的网络诊断工具（来源：rpi4-nixos-flake）+ 旁路由手工检查用
+    iproute2      # ip / ss
+    iputils       # ping / arping / tracepath
+    dnsutils      # dig / nslookup / host
+    mtr
+    traceroute
+    ethtool
+    tcpdump
+    socat
+    jq
+    lsof
+    whois
+    iptables      # 手工核对 NAT 规则（nixos-nat-* 链）
+    dae           # eBPF 代理/分流工具：仅装软件，不自动启动（无 services.dae 模块即不自启）
   ];
 
   # Automatic garbage collection
@@ -128,8 +164,8 @@
   nix.settings.auto-optimise-store = true;
   nix.optimise.automatic = true;
 
-  # Set your timezone to Dublin
-  time.timeZone = "Europe/Dublin";
+  # Set your timezone to Asia/Shanghai (UTC+8)
+  time.timeZone = "Asia/Shanghai";
 
   # Audio configuration with pulseaudio as you specified
   services.pulseaudio.enable = true;

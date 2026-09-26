@@ -1,0 +1,38 @@
+name: Build SD image
+
+# 只手动触发：Actions 页面 → Build SD image → Run workflow
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    # 公开仓库免费的 arm64 runner（GitHub 官方 2025-08 GA），
+    # 与目标 aarch64-linux 同架构，原生构建，不需要 QEMU / 交叉编译。
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v23
+        with:
+          # v21 起该 action 默认装 Determinate Nix；这里要 upstream Nix。
+          determinate: false
+
+      - name: Build SD image
+        run: nix build .#sdImage --out-link result
+
+      - name: Show image size
+        run: ls -lh result/sd-image/
+
+      - name: Upload SD image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sd-image
+          path: result/sd-image/*.img.zst
+          # 镜像本身就是 zstd 压缩的，artifact 层不再压，省时间
+          compression-level: 0
+          retention-days: 14
+          if-no-files-found: error
