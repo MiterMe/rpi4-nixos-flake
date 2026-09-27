@@ -2,7 +2,9 @@
   description = "NixOS configuration for Raspberry Pi 4";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    # 26.05 stable：包版本冻结、只收安全修补（2026-09-27 定稿）。
+    # 版本升级靠手动更新 flake.lock（.github/workflows/update-flake-lock.yml）。
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05";
     nixos-hardware.url = "github:NixOS/nixos-hardware";
   };
 

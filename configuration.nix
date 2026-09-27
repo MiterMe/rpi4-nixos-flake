@@ -16,50 +16,28 @@
   boot.tmp.cleanOnBoot = true;
   boot.tmp.useTmpfs = true;
 
-  # Create symbolic links for partition labels to handle different naming schemes
-  boot.initrd.postDeviceCommands = lib.mkBefore ''
-    # Create symlinks for partition labels to ensure compatibility
-    mkdir -p /dev/disk/by-label
-    for label in NIXOS_BOOT BOOT boot FIRMWARE; do
-      if [ -e /dev/disk/by-label/$label ]; then
-        # Create symlinks for all possible names
-        for target in NIXOS_BOOT BOOT boot FIRMWARE; do
-          if [ "$label" != "$target" ]; then
-            ln -sf /dev/disk/by-label/$label /dev/disk/by-label/$target 2>/dev/null || true
-          fi
-        done
-        break
-      fi
-    done
-    
-    # Similarly for root partition
-    for label in NIXOS_SD nixos nixos-root root; do
-      if [ -e /dev/disk/by-label/$label ]; then
-        for target in NIXOS_SD nixos nixos-root root; do
-          if [ "$label" != "$target" ]; then
-            ln -sf /dev/disk/by-label/$label /dev/disk/by-label/$target 2>/dev/null || true
-          fi
-        done
-        break
-      fi
-    done
-  '';
-
-  # Define file systems for the running system
-  # The SD card typically uses these labels on a Raspberry Pi with NixOS
+  # ── 分区标签 ──
+  # 26.05 的 sd-image 模块打标签 FIRMWARE（FAT）+ NIXOS_SD（ext4），
+  # 与下面 fileSystems 的期望一致（source: sd-image.nix @ nixos-26.05，
+  # firmwarePartitionName / rootVolumeLabel 的默认值）。
+  # 旧版那段 initrd 标签别名 hack（postDeviceCommands）已删：26.05 的
+  # systemd stage 1 明令不支持该选项（求值门禁报错实锤），且标签已自洽。
   fileSystems = {
     "/" = {
       device = lib.mkDefault "/dev/disk/by-label/NIXOS_SD";
       fsType = "ext4";
       options = [ "noatime" "nodiratime" "discard" ];
     };
-    
-    "/boot" = {
-      # The SD image module uses FIRMWARE as the boot partition label
+
+    # 26.05 布局：FAT 分区只放树莓派固件（config.txt / u-boot），挂 /boot/firmware；
+    # 引导文件（extlinux.conf、内核引用）在 ext4 的 /boot——generic-extlinux-compatible
+    # 的 mirroredBoots 默认 path = "/boot"（26.05 源码实锤）。
+    # ⚠️ 不能把 FAT 挂在 /boot：会遮住 ext4 的 /boot，Pi 上 nixos-rebuild 会把
+    # extlinux.conf 写进 FAT，u-boot 按相对路径在 FAT 里找不到 /nix/store 内核 ⇒ 砖。
+    "/boot/firmware" = {
       device = "/dev/disk/by-label/FIRMWARE";
       fsType = "vfat";
-      # Continue even if not mountable
-      options = [ "defaults" "nofail" ]; 
+      options = [ "noauto" "nofail" ];  # 与 26.05 sd-image 模块自身声明一致
     };
   };
   
@@ -175,9 +153,10 @@
     lsof
     whois
     iptables      # 手工核对 NAT 规则（nixos-nat-* 链）
-    dae           # eBPF 代理/分流工具：仅装软件，不自动启动（无 services.dae 模块即不自启）
-    sing-box
     tmux
+    # dae / sing-box 不走 nixpkgs（26.05 里版本过旧：dae 1.0.0 / sing-box 1.13.19）。
+    # 改为从 GitHub releases 下载独立 Go 静态二进制，放 /home/nixos/bin/，
+    # 不与系统捆绑、不受 flake.lock 版本约束（2026-09-27 翔哥决策）。
   ];
 
   # Automatic garbage collection

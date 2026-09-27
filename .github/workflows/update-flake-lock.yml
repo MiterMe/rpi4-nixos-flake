@@ -1,0 +1,50 @@
+name: Update flake.lock
+
+# 只手动触发：Actions 页面 → Update flake.lock → Run workflow
+# 作用：把 nixpkgs / nixos-hardware 推进到 26.05 分支当前 HEAD，
+# 求值验证通过后自动 commit + push flake.lock。
+# 大流量的包拉取发生在 Build SD image 那个 workflow 里，本 workflow 只拉几 MB 的 flake 源码。
+on:
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: write   # 允许用 GITHUB_TOKEN 推送更新后的 lock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v23
+        with:
+          # v21 起该 action 默认装 Determinate Nix；这里要 upstream Nix。
+          determinate: false
+
+      - name: Update flake inputs
+        run: nix flake update nixpkgs nixos-hardware
+
+      - name: Show new revisions
+        run: |
+          nix flake metadata --json | jq -r '
+            .locks.nodes | to_entries[]
+            | select(.key == "nixpkgs" or .key == "nixos-hardware")
+            | "\(.key): \(.value.locked.rev) (\(.value.locked.lastModified |todate))"'
+
+      # 门禁：完整求值两条部署路径（镜像 + 运行时）。
+      # 通道跨越引发的 option 改名/移除会在这里报错，workflow 失败 => 不会 push 坏 lock。
+      # 只求值不构建，几秒钟的事。
+      - name: Eval check (fail = do not push)
+        run: |
+          nix eval .#nixosConfigurations.rpi4.config.system.build.toplevel.drvPath
+          nix eval .#nixosConfigurations.rpi4-sdimage.config.system.build.toplevel.drvPath
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add flake.lock
+          git diff --cached --quiet && echo "lock unchanged, nothing to commit" && exit 0
+          git commit -m "Update flake.lock (nixos-26.05)"
+          git push
