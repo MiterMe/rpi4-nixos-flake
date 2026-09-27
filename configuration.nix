@@ -40,6 +40,15 @@
       options = [ "noauto" "nofail" ];  # 与 26.05 sd-image 模块自身声明一致
     };
   };
+
+  # ── 固件分区 U-Boot（必须显式开启！）──
+  # nixos-hardware 新版（raspberry-pi/common/firmware.nix）用 mkForce 接管了
+  # 固件分区的 populate：U-Boot 变成可选项，默认不拷 u-boot.bin、渲染出的
+  # config.txt 也没有 kernel= ⇒ Pi 上电后 GPU 固件找不到内核，直接死。
+  # （2026-09-27 首烧 26.05 镜像不启动的根因，源码实锤。）
+  # 开启后：拷 u-boot.bin + config.txt 写 kernel=u-boot.bin / arm_64bit=1，
+  # U-Boot 链式加载后读 ext4 /boot 里的 extlinux.conf。
+  hardware.raspberry-pi.firmware.uboot.enable = true;
   
   # Set hostname
   networking.hostName = "miters-rpi4";
