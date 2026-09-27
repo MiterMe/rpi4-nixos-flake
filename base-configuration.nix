@@ -151,6 +151,8 @@
     whois
     iptables      # 手工核对 NAT 规则（nixos-nat-* 链）
     dae           # eBPF 代理/分流工具：仅装软件，不自动启动（无 services.dae 模块即不自启）
+    sing-box
+    tmux
   ];
 
   # Automatic garbage collection
