@@ -119,6 +119,19 @@
     startWhenNeeded = false;
   };
 
+  # Enable dnsmasq
+  services.dnsmasq = {
+    enable = true;
+    settings = {
+      port = 5353;
+      listen-address = [ "127.0.0.1" ];
+      bind-interfaces = true;
+      no-resolv = true;
+      server = [ "192.168.1.1" ];              # 非 .lan 兜底（实际 dae 只会把 .lan 发来）
+      address = [ "/.scidy.lan/192.168.1.201" ];  # 通配全部 *.scidy.lan
+    };
+  };
+
   security.sudo.wheelNeedsPassword = false;
 
   # Enable experimental Nix flakes
